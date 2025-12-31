@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Colorius – Final Stable</title>
+<style>
+body {
+  margin: 0;
+  background: #0b0b0b;
+  color: #eaeaea;
+  font-family: monospace;
+}
+#hud {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  font-size: 12px;
+}
+#bossBar {
+  height: 12px;
+  background: #111;
+  border: 1px solid #333;
+  margin-top: 4px;
+}
+#bossFill {
+  height: 100%;
+  background: #c0392b;
+}
+#app {
+  padding: 12px;
+  padding-top: 70px;
+}
+.color {
+  margin-bottom: 16px;
+  padding-left: 8px;
+  border-left: 4px solid #e74c3c;
+}
+.bar {
+  height: 10px;
+  background: #111;
+  border: 1px solid #333;
+  margin-bottom: 4px;
+}
+.fill {
+  height: 100%;
+  background: #e74c3c;
+}
+button.buy {
+  width: 100%;
+  background: #111;
+  border: 1px solid #e74c3c;
+  color: #e74c3c;
+  font-size: 11px;
+  padding: 6px;
+}
+</style>
+</head>
+<body>
+
+<div id="hud"><div id="money">$10</div></div>
+<div id="app"></div>
+
+<script>
+let money = 10;
+let bossMax = 100;
+let bossHP = bossMax;
+
+const BASE_SPEED = 0.15;
+const COST_GROWTH = 1.6;
+const RENDER_CAP = 6;
+
+const state = {
+  generators: 0,
+  cost: 10,
+  bars: [
+    { value: 0, unlocked: true, hasUnlockedNext: false }
+  ]
+};
+
+function format(n) {
+  return Math.floor(n).toLocaleString();
+}
+
+function buyGen() {
+  if (money < state.cost) return;
+  money -= state.cost;
+  state.generators++;
+  state.cost = Math.floor(10 * Math.pow(COST_GROWTH, state.generators));
+}
+
+function tick(dt) {
+  if (state.generators === 0) return;
+
+  // Only bottom bar ticks
+  state.bars[0].value += BASE_SPEED * state.generators * dt;
+
+  for (let i = 0; i < state.bars.length; i++) {
+    const bar = state.bars[i];
+    if (bar.value >= 1) {
+      const completions = Math.floor(bar.value);
+      bar.value -= completions;
+
+      // Unlock exactly ONE next bar
+      if (!bar.hasUnlockedNext) {
+        state.bars.push({ value: 0, unlocked: true, hasUnlockedNext: false });
+        bar.hasUnlockedNext = true;
+      }
+
+      // Feed next bar only
+      if (state.bars[i + 1]) {
+        state.bars[i + 1].value += completions;
+      }
+
+      // Damage starts at bar index 2 (third bar)
+      if (i >= 2) {
+        bossHP -= completions;
+        money += completions;
+        if (bossHP <= 0) {
+          bossMax *= 5;
+          bossHP = bossMax;
+        }
+      }
+    }
+  }
+}
+
+function render() {
+  document.getElementById("money").textContent = "$" + format(money);
+  const app = document.getElementById("app");
+  app.innerHTML = "";
+
+  const boss = document.createElement("div");
+  boss.innerHTML = `
+    BOSS HP ${format(bossHP)} / ${format(bossMax)}
+    <div id="bossBar">
+      <div id="bossFill" style="width:${(bossHP / bossMax) * 100}%"></div>
+    </div>
+  `;
+  app.appendChild(boss);
+
+  const color = document.createElement("div");
+  color.className = "color";
+  color.innerHTML = `RED<br>Gen: ${state.generators} | Cost: ${format(state.cost)}`;
+
+  // Render ONLY last N bars
+  const barsToRender = state.bars.slice(-RENDER_CAP);
+  for (const bar of barsToRender) {
+    const barDiv = document.createElement("div");
+    barDiv.className = "bar";
+    const fill = document.createElement("div");
+    fill.className = "fill";
+    fill.style.width = Math.min(bar.value * 100, 100) + "%";
+    barDiv.appendChild(fill);
+    color.appendChild(barDiv);
+  }
+
+  const btn = document.createElement("button");
+  btn.className = "buy";
+  btn.textContent = "BUY GEN";
+  btn.onclick = buyGen;
+  color.appendChild(btn);
+
+  app.appendChild(color);
+}
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, 0.1);
+  last = now;
+  tick(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+loop(last);
+</script>
+
+</body>
+</html>
